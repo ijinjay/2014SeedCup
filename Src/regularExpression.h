@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 /****************************************************
  * 外部接口函数patternSearch，完成串的匹配工作
@@ -25,3 +26,4 @@
  *      1：					 匹配成功
  */
 int patternSearch(const char *pattern, const char *str, char *result);
+int handleRange(int len, ...);

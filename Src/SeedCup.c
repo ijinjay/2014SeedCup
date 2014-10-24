@@ -10,6 +10,13 @@ int main(int argc, char const *argv[])
 {
 	// 命令行模式下使用：SeedCup.exe pattern str
 	printf("To beautiful you~ %d\n", argc);
+
+	// 变长参数与指针函数的使用
+	// handleRange(3, "to ", "beautiful ", "you !\n");
+	// int (*fpointer)(int, ...);
+	// fpointer = handleRange;
+	// (*fpointer)(2, "yes", "successed\n");
+
 	if (argc == 3) 
 	{
 		char *result = (char *)malloc(1024 * sizeof(char));
@@ -19,7 +26,7 @@ int main(int argc, char const *argv[])
 			printf("%s\n", result);
 		}
 		else
-			printf("Failed\n");
+			printf("Failed! Cannot match! :(\n");
 	}
 	else 
 	{
