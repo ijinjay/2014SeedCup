@@ -29,7 +29,7 @@ int patternSearch(const char *pattern, const char *str, char *result);
 
 // 重复次数的枚举
 enum eMulTimes {
-	one = 1,	// 不重复
+	one = 0,	// 不重复
 	zero2one, 	// 重复0-1次
 	one2n,		// 重复1-n次
 	zero2n,		// 重复0-n次
@@ -51,7 +51,7 @@ enum eWord {
 	nonSpace  = 266, // 非空白
 	nonDigit  = 267, // 非数字
 	nonBegin  = 268, // 非开始
-	nonRange  = 270, // 非范围
+	nonRange  = 270, // 范围内不选择
 };
 /****************************************************
  * 记录每个节点的结构体
@@ -61,7 +61,7 @@ typedef struct WordNode {
 	int contentLen;
 	int type;
 	int (*pCompareFunc)(int, ...);
-}WordNode, *pWordNode;
+}WordNode;
 
 /****************************************************
  * 内部数据结构State
