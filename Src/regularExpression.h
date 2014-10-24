@@ -11,6 +11,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 /****************************************************
  * 外部接口函数patternSearch，完成串的匹配工作
