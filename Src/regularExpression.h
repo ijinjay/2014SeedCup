@@ -60,7 +60,7 @@ typedef struct WordNode {
 	char content[20];
 	int contentLen;
 	int type;
-	int (*pCompareFunc)(int, ...);
+	int (*pCompareFunc)(char, ...);
 }WordNode;
 
 /****************************************************
