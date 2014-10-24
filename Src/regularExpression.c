@@ -6,65 +6,15 @@
 
 #include "regularExpression.h"
 
-// 重复次数的枚举
-enum eMulTimes {
-	one,		// 不重复
-	zero2one, 	// 重复0-1次
-	one2n,		// 重复1-n次
-	zero2n,		// 重复0-n次
-	n,			// 重复n次
-	n2more,		// 重复n-更多次
-	n2m 		// 重复n-m次
-};
-// 词性的枚举
-enum eWord {
-	dot      = 256,
-	word     = 257,
-	space    = 258,
-	digit    = 259,
-	begin    = 260,
-	start    = 261,
-	dollar   = 262,
-	range    = 263,
-	alpha    = 264,
-	a_word   = 265,
-	a_space  = 266,
-	a_digit  = 267,
-	a_begin  = 268,
-	a_range  = 269,
-	repeat   = 270,
-	a_alpha  = 271,
-};
-/****************************************************
- * 记录每个节点的结构体
- */
-typedef struct WordNode {
-	char content[20];
-	int contentLen;
-	int wordType;
-	int (*pCompareFunc)(int, ...);
-}WordNode, *pWordNode;
-
-/****************************************************
- * 内部数据结构State
- * 		记录当前的状态信息
- */
-typedef struct State {
-	WordNode word;
-	enum eMulTimes type;
-	struct State *next;	// 下一个状态节点
-} State, *pStateNode;
-
-/****************************************************
- * 分支匹配头结点结构
- * 结构体参数：
- * 		State *head;     	头结点不存储节点信息，只作为指针
- * 		int len;			头结点包含的基本元素个数，匹配时的最小可匹配串长度
- */
-typedef struct Head {
-	State *head;		// 头结点
-	int len;			// 字符串长度
-} Head, *pHeadNode;
+static void handleBrace(const char *pattern, int i, pStateNode currentNode);
+static void handleBracket(const char*pattern, int i, pStateNode currentNode);
+static int normalCompare(int i, ...);
+static int dotCompare(int i, ...);
+static int numCompare(int i, ...);
+static int wordCompare(int i, ...);
+static int alphaCompare(int i, ...);
+static int selectCompare(int i, ...);
+static int spaceCompare(int i, ...);
 
 /****************************************************
  * 内部函数handleBrace
@@ -78,19 +28,19 @@ typedef struct Head {
 void handleBrace(const char *pattern, int i, pStateNode node) {
 	if (pattern[i+2] == '}')  		// {n}	
 	{
-		node->type = eMulTimes.n;
+		node->type = n;
 		node->word.content[node->word.contentLen] = pattern[i+1];
 		i = i + 2;
 	}
 	else if (pattern[i+3] == '}') 	// {n,}
 	{
-		node->type = eMulTimes.n2more;
+		node->type = n2more;
 		node->word.content[node->word.contentLen] = pattern[i+1];
 		i = i + 3;
 	}
 	else if (pattern[i+4] == '}')	// {n,m}
 	{
-		node->type = eMulTimes.n2more;
+		node->type = n2more;
 		node->word.content[node->word.contentLen] = pattern[i+1];
 		node->word.content[node->word.contentLen + 1] = pattern[i+3];
 		i = i + 4;
@@ -100,7 +50,7 @@ void handleBrace(const char *pattern, int i, pStateNode node) {
 }
 
 /****************************************************
- * 处理一般比较选择语句
+ * 处理比较的语句
  * 输入参数：
  * 		int i;			变长参数个数
  * 		const char ch;  模式字符
@@ -112,11 +62,47 @@ void handleBrace(const char *pattern, int i, pStateNode node) {
 int normalCompare(int i,...) {
 	va_list v;
 	va_start(v, i);
-	char ch = va_arg(v, char);
-	char sch = va_arg(v, char);
+	char ch = (char)va_arg(v, int);
+	char sch = (char)va_arg(v, int);
 	va_end(v);
 	return (ch == sch);
 }
+int dotCompare(int i,...) {
+	va_list v;
+	va_start(v, i);
+	char ch = (char)va_arg(v, int);
+	va_end(v);
+	return (ch != '\n');
+}
+int wordCompare(int i,...) {
+	va_list v;
+	va_start(v, i);
+	char ch = (char)va_arg(v, int);
+	va_end(v);
+	return isalnum(ch);
+}
+int alphaCompare(int i,...) {
+	va_list v;
+	va_start(v, i);
+	char ch = (char)va_arg(v, int);
+	va_end(v);
+	return isalpha(ch);
+}
+int numCompare(int i, ...) {
+	va_list v;
+	va_start(v, i);
+	char ch = (char)va_arg(v, int);
+	va_end(v);
+	return isdigit(ch);
+}
+int spaceCompare(int i, ...) {
+	va_list v;
+	va_start(v, i);
+	char ch = (char)va_arg(v, int);
+	va_end(v);
+	return isspace(ch);
+}
+
 /****************************************************
  * 处理[]选择语句
  * 输入参数：
@@ -127,13 +113,14 @@ int normalCompare(int i,...) {
  * 返回值：
  *		0				失败
  *		1 				成功
+ * 用法selectCompare(i, content, len, ch)
  */
-int selectStc(int i,...) {
+int selectCompare(int i,...) {
 	va_list v;
 	va_start(v, i);
 	char *content = va_arg(v, char *);
 	int len = va_arg(v, int);
-	char ch = va_arg(v, char);
+	char ch = (char)va_arg(v, int);
 	va_end(v);
 	
 	for (int j = 0; j < len; ++j) {
@@ -152,16 +139,42 @@ int selectStc(int i,...) {
  *		pStateNode node;		当前单词节点
  */
 void handleBracket(const char *pattern, int i, pStateNode node) {
+	// 是否含有^
+	int nonSelect = 0;
+	if (pattern[i+1] == '^')
+		nonSelect = 1;
 	// 新节点
 	pStateNode newNode = (pStateNode)malloc(sizeof(State));
 	// 将供选择的元素加入节点的content中
 	while(pattern[++i] != ']') {
 		newNode->word.content[newNode->word.contentLen ++] = pattern[i];
 	}
-	newNode->word.pCompareFunc = selectStc;
+	newNode->word.pCompareFunc = selectCompare;
+	newNode->word.type = range;
 	newNode->next = NULL;
-	node->newNode = newNode;
+	node->next = newNode;
 	node = newNode;
+}
+
+void handleSlash(const char *pattern, int i, pStateNode node) {
+	pStateNode newNode = (pStateNode)malloc(sizeof(State));
+	switch(pattern[++i]) {
+		case 's': newNode->word.type = space;newNode->word.pCompareFunc = spaceCompare;break;
+		case 'S': newNode->word.type = nonSpace;newNode->word.pCompareFunc = spaceCompare;break;
+		case 'w': newNode->word.type = word;newNode->word.pCompareFunc = wordCompare;break;
+		case 'W': newNode->word.type = nonWord;newNode->word.pCompareFunc = wordCompare;break;
+		case 'd': newNode->word.type = digit;newNode->word.pCompareFunc = numCompare;break;
+		case 'D': newNode->word.type = nonDigit;newNode->word.pCompareFunc = numCompare;break;
+		default:  newNode->word.type = pattern[i];
+				  newNode->word.pCompareFunc = normalCompare;
+				  newNode->word.content[0] = pattern[i];
+				  newNode->word.contentLen = 1;
+ 				  break;
+	}
+	newNode->next = NULL;
+	node->next = newNode;
+	node = newNode;
+	// 新节点
 }
 /****************************************************
  * 内部函数pattern2NFA
@@ -180,11 +193,12 @@ static Head pattern2NFA(const char *pattern) {
 	pStateNode currentNode = h.head;
 	for (int i = 0; i < length; ++i) {
 		switch(pattern[i]) {
-			case '?': currentNode->type = eMulTimes.zero2one ; continue;
-			case '+': currentNode->type = eMulTimes.one2n; continue;
-			case '*': currentNode->type = eMulTimes.zero2n; continue;
+			case '?': currentNode->type = zero2one; h.len --; continue;
+			case '+': currentNode->type = one2n; continue;
+			case '*': currentNode->type = zero2n; h.len --; continue;
 			case '{': handleBrace(pattern, i, currentNode);	continue;
-			case '[': handleBrace(pattern, i, currentNode); h.len ++; continue;
+			case '[': handleBracket(pattern, i, currentNode); h.len ++; continue;
+			case '\\':handleSlash(pattern, i, currentNode); h.len ++; continue;
 			default:  break;
 		}
 		pStateNode newNode = (pStateNode)malloc(sizeof(State));
@@ -223,20 +237,25 @@ static void freeHead(Head h) {
 // 		p = p->next;
 // 	}
 // }
-
-/******
- * 处理变长参数列表
- */
-int handleRange(int len, ...) {
-	va_list vLists;
-	va_start(vLists, len);
-	for (int i = 0; i < len; ++i)
-	{
-		char *s = va_arg(vLists, char *);
-		printf("%s", s);
+int handleSingle(pStateNode node, char ch) {
+	switch(node->word.type) {
+		case dot: 
+		case space:
+		case digit:
+		case begin:
+		case dollar:
+			return ((*(node->word.pCompareFunc))(1, ch));
+		case nonSpace:
+		case nonDigit:
+		case nonBegin:
+			return !((*(node->word.pCompareFunc))(1, ch));
+		case range:
+			return ((*(node->word.pCompareFunc))(1, node->word.content, node->word.contentLen, ch));
+		case nonRange:
+			return !((*(node->word.pCompareFunc))(1, node->word.content, node->word.contentLen, ch));
+		default:
+			return !((*(node->word.pCompareFunc))(node->word.content[0], ch));
 	}
-	return 0;
-
 }
 
 int patternSearch(const char *pattern, const char *str, char *result) {
@@ -254,24 +273,31 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 			switch(currentNode->type)
 			{
 				// 当前节点重复0-1次
-				case eMulTimes.zero2one: 
-						if (currentNode->ch == str[j]) {
+				case zero2one: 
+						if (handleSingle(currentNode, str[j])) {
 							result[k++] = str[j++];
 						}
 						break;
 				// 重复1-n次
-				case eMulTimes.one2n: 
-						if (!(*(currentNode->word.fCompareFunc))()) {
+				case one2n: 
+						if (!handleSingle(currentNode, str[j])) {
 							failFlag = 1;
 							break;
 						}
 						result[k ++] = str[j ++];
 				// 重复0-n次
-				case 3: while(currentNode->ch == str[j]) {
-					result[k++] = result[j++];
-				}
-				break;
-				default:if (currentNode->ch == str[j])
+				case zero2n: 
+						while(handleSingle(currentNode, str[j])) {
+							result[k++] = result[j++];
+						}
+						break;
+				// 重复n次
+				case n:
+						for (int i = 0; i < n; ++i)
+						{
+						}
+						break;
+				default:if (handleSingle(currentNode, str[j]))
 							result[k++] = result[j++];
 						else
 							failFlag = 1;
