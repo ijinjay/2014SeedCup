@@ -64,11 +64,11 @@ static void freeHead(Head h)
 int patternSearch(const char *pattern, const char *str, char *result)
 {
 	Head h = pattern2NFA(pattern);
-	pStateNode *root = h.head;
+	pStateNode root = h.head;
 
 	for (int i = 0; i <= strlen(str) - h.len; ++i)
 	{
-		pStateNode *currentNode = root;
+		pStateNode currentNode = root;
 		int j = i;
 		int k = 0; 	// 记录result
 		int failFlag = 0;
