@@ -9,7 +9,7 @@
 int readFileData(int i, char *data)
 {
 	char *filename = (char *)malloc(30 * sizeof(char));
-	sprintf(filename, "..\\RegexDemo\\text%d.txt", i);
+	sprintf(filename, "../RegexDemo/text%d.txt", i);
 	int fd = open(filename, O_RDONLY);
 	free(filename);
 

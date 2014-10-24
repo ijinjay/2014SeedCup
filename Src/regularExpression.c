@@ -25,21 +25,18 @@ typedef struct Head {
 	int len;			// 字符串长度
 } Head, *pHeadNode;
 
-static Head pattern2NFA(const char *pattern)
-{
+static Head pattern2NFA(const char *pattern) {
 	Head h;
 	h.head = (State *)malloc(sizeof(State));
 	h.len = 0;
 	int length = strlen(pattern);
 	pStateNode currentNode = h.head;
-	for (int i = 0; i < length; ++i)
-	{
-		switch(pattern[i])
-		{
+	for (int i = 0; i < length; ++i) {
+		switch(pattern[i]) {
 			case '?': currentNode->type = 1; continue;
 			case '+': currentNode->type = 2; continue;
 			case '*': currentNode->type = 3; continue;
-			default: currentNode->type = 0; break;
+			default:  break;
 		}
 		pStateNode newNode = (pStateNode)malloc(sizeof(State));
 		newNode->ch = pattern[i];
@@ -52,8 +49,15 @@ static Head pattern2NFA(const char *pattern)
 	return h;
 }
 
-static void freeHead(Head h)
-{
+static void printHead(const Head h) {
+	pStateNode p = h.head->next;
+	while(p != NULL) {
+		printf("%c \t %d\n", p->ch, p->type);
+		p = p->next;
+	}
+}
+
+static void freeHead(Head h) {
 	State *currentNode = h.head;
 	while(currentNode != NULL) {
 		h.head = currentNode->next;
@@ -61,14 +65,13 @@ static void freeHead(Head h)
 		currentNode = h.head;
 	}
 }
-int patternSearch(const char *pattern, const char *str, char *result)
-{
+int patternSearch(const char *pattern, const char *str, char *result) {
 	Head h = pattern2NFA(pattern);
 	pStateNode root = h.head;
 
 	for (int i = 0; i <= strlen(str) - h.len; ++i)
 	{
-		pStateNode currentNode = root;
+		pStateNode currentNode = root->next;
 		int j = i;
 		int k = 0; 	// 记录result
 		int failFlag = 0;
@@ -83,10 +86,9 @@ int patternSearch(const char *pattern, const char *str, char *result)
 						break;
 				// 重复1-n次
 				case 2: if (currentNode->ch != str[j]) {
+							failFlag = 1;
 							break;
 						}
-						else
-							failFlag = 1;
 						result[k ++] = str[j ++];
 				// 重复0-n次
 				case 3: while(currentNode->ch == str[j]) {
@@ -106,6 +108,7 @@ int patternSearch(const char *pattern, const char *str, char *result)
 		if (!failFlag)
 		{
 			result[k] = '\0';
+			printf("Success %d, %d\n", i, k);
 			freeHead(h);
 			return 1;
 		}

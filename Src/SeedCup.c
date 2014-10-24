@@ -9,17 +9,21 @@
 int main(int argc, char const *argv[])
 {
 	// 命令行模式下使用：SeedCup.exe pattern str
+	printf("To beautiful you~ %d\n", argc);
 	if (argc == 3) 
 	{
 		char *result = (char *)malloc(1024 * sizeof(char));
+		printf("search pattern %s in %s\n", argv[1], argv[2]);
 		if(patternSearch(argv[1], argv[2], result))
 		{
 			printf("%s\n", result);
 		}
+		else
+			printf("Failed\n");
 	}
 	else 
 	{
-		FILE *patternFile = fopen("..\\RegexDemo\\regex.txt", "r");
+		FILE *patternFile = fopen("../RegexDemo/regex.txt", "r");
 		for (int i = 1; i <= TESTNUM; ++i)
 		{
 			// 读取模式串文件的第i行

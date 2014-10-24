@@ -1,15 +1,16 @@
 # 标志
-CC = gcc
+CC = clang
 CFLAGS = -Wall -std=c99
-rm = del /q
+rm = rm -rf
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 SeedCup: regularExpression.o fileHandle.o SeedCup.o
-	$(CC) $(CFLAGS) $^ -o SeedCup.exe
+	$(CC) $(CFLAGS) $^ -o SeedCup
 
 clean:
 	$(rm) *.o SeedCup.exe output*.txt
 install:
-	copy /b SeedCup.exe ..\bin\SeedCup.exe
+	cp SeedCup ..\bin\SeedCup
+
