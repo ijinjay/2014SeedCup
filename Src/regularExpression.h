@@ -29,7 +29,7 @@ int patternSearch(const char *pattern, const char *str, char *result);
 
 // 重复次数的枚举
 enum eMulTimes {
-	one = 0,	// 不重复
+	one = 0,	// 不重复，默认
 	zero2one, 	// 重复0-1次
 	one2n,		// 重复1-n次
 	zero2n,		// 重复0-n次
@@ -39,28 +39,28 @@ enum eMulTimes {
 };
 // 词性的枚举
 enum eWord {
-	dot      = 256,	 // 点
-	word     = 257,  // 字母或数字
-	space    = 258,  // 空格
-	digit    = 259,  // 数字
-	begin    = 260,  // 一行开头
-	stOrEnd  = 261,  // 单词开始或结尾
-	dollar   = 262,  // 结尾
-	range    = 263,  // 范围选择
-	nonWord   = 265, // 非字母或数字
-	nonSpace  = 266, // 非空白
-	nonDigit  = 267, // 非数字
-	nonStOrEnd= 268, // 非开始或结束的位置
-	nonRange  = 270, // 范围内不选择
+	dot       = 256, 	// 点
+	word      = 257, 	// 字母或数字
+	space     = 258, 	// 空格
+	digit     = 259, 	// 数字
+	begin     = 260, 	// 一行开头
+	stOrEnd   = 261, 	// 单词开始或结尾
+	dollar    = 262, 	// 结尾
+	range     = 263, 	// 范围选择
+	nonWord   = 264, 	// 非字母或数字
+	nonSpace  = 265, 	// 非空白
+	nonDigit  = 266, 	// 非数字
+	nonStOrEnd= 267, 	// 非开始或结束的位置
+	nonRange  = 268, 	// 范围内不选择
 };
 /****************************************************
- * 记录每个节点的结构体
+ * 记录每个字符节点的结构体
  */
 typedef struct WordNode {
-	char content[20];
-	int contentLen;
-	int type;
-	int (*pCompareFunc)(char, ...);
+	char content[20];				// 节点储存的内容，供比较实用
+	int  contentLen;					// 节点存储的字符个数
+	int  type;						// 节点的类型
+	int  (*pCompareFunc)(char, ...); // 节点比较时应使用的函数
 }WordNode;
 
 /****************************************************
@@ -69,8 +69,8 @@ typedef struct WordNode {
  */
 typedef struct State {
 	WordNode word;			// 当前待匹配单词
-	enum eMulTimes type;	// 当前状态重复信息
-	struct State *next;		// 下一个状态节点
+	enum eMulTimes 	type;	// 当前状态重复信息
+	struct State * 	next;		// 下一个状态节点
 } State, *pStateNode;
 
 /****************************************************
@@ -81,7 +81,7 @@ typedef struct State {
  */
 typedef struct Head {
 	State *head;		// 头结点
-	int len;			// 字符串长度
+	int    len;			// 字符串长度
 } Head, *pHeadNode;
 
 /****************************************************
@@ -91,8 +91,8 @@ typedef struct Head {
  * 		int len;			分支个数
  */
 typedef struct Branch{
-	Head h[10];
-	int num;
+	Head h[10];			// 分支数组
+	int  num;			// 分支个数
 } Branch;
 
 typedef struct Patterns

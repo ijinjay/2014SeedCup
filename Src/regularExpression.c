@@ -5,12 +5,13 @@
  */
 
 #include "regularExpression.h"
-
-static void handleBrace(const char *pattern, int *i, const pStateNode currentNode);
+/* 内部函数列表 */
+// 处理模式串的函数
+static void handleBrace(const char *pattern, int *i, const pStateNode currentNode); 
 static void handleBracket(const char *pattern, int *i, pStateNode *pNode);
 static void handleSlash(const char *pattern, int *i, pStateNode *pNode);
 static void handleDotStartEnd(const char ch, pStateNode *pNode);
-static int singleCompare(pStateNode node, const char *str, int *pos, int *resultPos);
+// 处理匹配时的比较函数
 static int normalCompare(char ch, ...);
 static int dotCompare(char ch, ...);
 static int numCompare(char ch, ...);
@@ -21,14 +22,20 @@ static int wordStartCompare(char ch, ...);
 static int lineStartCompare(char ch, ...);
 static int endCompare(char ch, ...);
 static int startEndCompare(char ch, ...);
+// 单个字符匹配的入口函数
+static int singleCompare(pStateNode node, const char *str, int *pos, int *resultPos);
+// 将模式串转为NFA
+static Head pattern2NFA(const char *pattern);
+// 释放节点链表分支占用的内存
+static void freeHeads(Branch branches);
 
 
 /****************************************************
  * 处理比较的语句
  * 输入参数：
- * 		int i;			变长参数个数
- * 		const char ch;  模式字符
- * 		const char sch;	待匹配的字符
+ * 		char ch;		待比较的字符
+ *   	char *str;		待匹配的字符串地址
+ *		int  pos;		待匹配的字符位置
  * 返回值：
  *		0				失败
  *		1 				成功
@@ -52,7 +59,9 @@ int numCompare(char ch, ...) {
 int spaceCompare(char ch, ...) {
 	return isspace(ch);
 }
+// 匹配单词开始位置，当前位置为第一个字符时或前一个字符是空字符且当前字符不为空字符
 int wordStartCompare(char ch, ...) {
+	// 解析可变参数列表
 	va_list v;
 	va_start(v, ch);
 	char *str = va_arg(v, char *);
@@ -65,6 +74,7 @@ int wordStartCompare(char ch, ...) {
 		return 1;
 	return 0;
 }
+// 匹配行开始，当前位置为第一个字符或前一个字符为'\n'
 int lineStartCompare(char ch, ...) {
 	va_list v;
 	va_start(v, ch);
@@ -77,6 +87,7 @@ int lineStartCompare(char ch, ...) {
 		return 1;
 	return 0;
 }
+// 匹配一行的结束，当前位置为最后一个字符或为'\n'
 int endCompare(char ch, ...) {
 	va_list v;
 	va_start(v, ch);
@@ -91,6 +102,7 @@ int endCompare(char ch, ...) {
 		return 1;
 	return 0;
 }
+// 匹配单词的开始或结尾，当前位置不为空字符，前一个或后一个字符为空字符
 int startEndCompare(char ch, ...) {
 	va_list v;
 	va_start(v, ch);
@@ -152,7 +164,7 @@ int selectCompare(char ch,...) {
  * 输入参数：
  *		const char *pattern;	模式串
  * 输入和输出参数：
- *		int i;					当前{所在位置
+ *		int *i;					当前{所在位置
  *		pStateNode node;		当前单词节点
  */
 void handleBrace(const char *pattern, int *i, pStateNode node) {
@@ -185,7 +197,7 @@ void handleBrace(const char *pattern, int *i, pStateNode node) {
  * 输入参数：
  *		const char *pattern;	模式串
  * 输入和输出参数：
- *		int i;					当前[所在位置
+ *		int *i;					当前[所在位置
  *		pStateNode node;		当前单词节点
  */
 void handleBracket(const char *pattern, int *i, pStateNode *pNode) {
@@ -208,11 +220,21 @@ void handleBracket(const char *pattern, int *i, pStateNode *pNode) {
 	(*pNode) = newNode;
 }
 
+/****************************************************
+ * 内部函数handleSlash
+ * 		处理转义字符
+ * 输入参数：
+ *		const char *pattern;	模式串
+ * 输入和输出参数：
+ *		int *i;					当前[所在位置
+ *		pStateNode node;		当前单词节点
+ */
 void handleSlash(const char *pattern, int *i, pStateNode *pNode) {
 	// 新节点
 	pStateNode newNode = (pStateNode)malloc(sizeof(State));
 	newNode->type = 0;
 	newNode->word.content[0] = pattern[++(*i)];
+	// 根据转义字符类型，添加节点的类型和相应的比较处理函数
 	switch(pattern[(*i)]) {
 		case 's': newNode->word.type = space;  	 	newNode->word.pCompareFunc = spaceCompare;break;
 		case 'S': newNode->word.type = nonSpace; 	newNode->word.pCompareFunc = spaceCompare;break;
@@ -227,6 +249,7 @@ void handleSlash(const char *pattern, int *i, pStateNode *pNode) {
 				  newNode->word.contentLen = 1;
  				  break;
 	}
+	// 将生成的新节点加入链表
 	newNode->next = NULL;
 	(*pNode)->next = newNode;
 	(*pNode) = newNode;
@@ -236,12 +259,14 @@ void handleDotStartEnd(const char ch, pStateNode *pNode) {
 	pStateNode newNode = (pStateNode)malloc(sizeof(State));
 	newNode->type = 0;
 	newNode->next = NULL;
+	// 根据不同的单词类型添加不同的比较函数
 	switch (ch) {
 		case '.': newNode->word.type = dot; 	newNode->word.pCompareFunc = dotCompare; break;
 		case '^': newNode->word.type = begin; 	newNode->word.pCompareFunc = lineStartCompare; break;
 		case '$': newNode->word.type = dollar; 	newNode->word.pCompareFunc = endCompare; break;
 		default:  printf("Error !\n"); break;
 	}
+	// 将生成的新节点加入链表
 	(*pNode)->next = newNode;
 	(*pNode) = newNode;
 }
@@ -253,14 +278,16 @@ void handleDotStartEnd(const char ch, pStateNode *pNode) {
  *		const char *pattern
  * 返回值：
  *		Head h;
- * 注意： 返回的Head 需要在不用的时候释放内存使用freeHead()函数
+ * 注意： 返回的Head 需要在不用的时候释放内存使用freeHeads()函数
  */
-static Head pattern2NFA(const char *pattern) {
+Head pattern2NFA(const char *pattern) {
 	Head h;
+	// 初始化
 	h.head = (State *)malloc(sizeof(State));
 	h.len = 0;
 	int length = strlen(pattern);
 	pStateNode currentNode = h.head;
+	// 遍历模式串，生成NFA
 	for (int i = 0; i < length; ++i) {
 		switch(pattern[i]) {
 			case '?': currentNode->type = zero2one; h.len --; continue;
@@ -276,6 +303,7 @@ static Head pattern2NFA(const char *pattern) {
 			case ')': continue;
 			default:  break;
 		}
+		// 为普通的字符时，直接新建一个节点，保存为普通类型，加入节点链表
 		pStateNode newNode = (pStateNode)malloc(sizeof(State));
 		newNode->word.content[0] = pattern[i];
 		newNode->word.contentLen = 1;
@@ -295,7 +323,7 @@ static Head pattern2NFA(const char *pattern) {
  * 输入参数：
  *		Branch branches;
  */
-static void freeHeads(Branch branches) {
+void freeHeads(Branch branches) {
 	for (int i = 0; i < branches.num; ++i) {
 		State *currentNode = branches.h[i].head;
 		while(currentNode != NULL) {
@@ -306,6 +334,18 @@ static void freeHeads(Branch branches) {
 	}
 }
 
+/****************************************************
+ * 内部函数singleCompare
+ *		比较一个待匹配字符
+ * 输入参数：
+ *		pStateNode node;		当前NFA的节点
+ *		const char *str;		待匹配的串
+ * 		int *pos;				当前匹配的位置，会被更改
+ * 		int *k;					结果串的位置，会被更改
+ * 返回值：
+ *		0						匹配失败
+ *		1 						匹配成功
+ */
 int singleCompare(pStateNode node, const char *str, int *pos, int *k) {
 	int j = *pos;
 	switch(node->word.type) {
@@ -369,10 +409,7 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 		printHead(branches.h[i]);
 	}
 
-	// Head h = pattern2NFA(pattern);
-	// pStateNode root = h.head;
-	// printHead(h);
-
+	// 遍历待匹配字符串，逐一匹配
 	for (int i = 0; i <= strlen(str) - minLen; ++i)
 	{
 		for (int branchID = 0; branchID < id; ++branchID)
@@ -402,7 +439,7 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 								result[k++] = result[j++];
 							}
 							break;
-					// 重复n次
+					// 重复n次,n2m次,n2more次
 					case n:
 					case n2m:
 					case n2more:
@@ -425,6 +462,7 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 								}
 							}
 							break;
+					// 默认情况是直接匹配，不重复更多次
 					default:if (singleCompare(currentNode, str, &j, &k))
 								result[k++] = result[j++];
 							else
@@ -435,12 +473,12 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 					break;
 				currentNode = currentNode->next;
 			}
-			if (!failFlag)
-			{
+			// 匹配成功
+			if (!failFlag) {
 				result[k] = '\0';
 				printf("Success %d, %d\n", i, k);
-				for (int l = 0; l < k; ++l)
-				{
+				// 存入结果
+				for (int l = 0; l < k; ++l) {
 					result[l] = str[i+l];
 				}
 				freeHeads(branches);
@@ -448,6 +486,9 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 			}
 		}
 	}
+	// 匹配失败，应返回NULL给result
+	
+	// 释放内存
 	freeHeads(branches);
 	return 0;
 }

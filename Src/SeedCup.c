@@ -45,16 +45,16 @@ int main(int argc, char const *argv[])
 				printf("File not exists.\n");
 
 			// 开始匹配
-			char *result = (char *)malloc(1024 * sizeof(char));
+			char result[1024];
 			printf("search %s in %s\n", pattern, str);
-			patternSearch(pattern, str, result);
-			printf("%s", result);
-
+			if(!patternSearch(pattern, str, result)) {	
+				result[0] = '\0';
+			}
+			else 
+				printf("%s", result);
 			// 将结果写入文件
-			writeFile(i, str);
-
+			writeFile(i, result);
 			free(str);
-			free(result);
 		}
 		fclose(patternFile);
 	}
