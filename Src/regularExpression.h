@@ -43,14 +43,14 @@ enum eWord {
 	word     = 257,  // 字母或数字
 	space    = 258,  // 空格
 	digit    = 259,  // 数字
-	begin    = 260,  // 单词开头
-	stOrEnd  = 261,  // 开始或结尾
+	begin    = 260,  // 一行开头
+	stOrEnd  = 261,  // 单词开始或结尾
 	dollar   = 262,  // 结尾
 	range    = 263,  // 范围选择
 	nonWord   = 265, // 非字母或数字
 	nonSpace  = 266, // 非空白
 	nonDigit  = 267, // 非数字
-	nonBegin  = 268, // 非开始
+	nonStOrEnd= 268, // 非开始或结束的位置
 	nonRange  = 270, // 范围内不选择
 };
 /****************************************************
@@ -68,18 +68,35 @@ typedef struct WordNode {
  * 		记录当前的状态信息
  */
 typedef struct State {
-	WordNode word;
-	enum eMulTimes type;
-	struct State *next;	// 下一个状态节点
+	WordNode word;			// 当前待匹配单词
+	enum eMulTimes type;	// 当前状态重复信息
+	struct State *next;		// 下一个状态节点
 } State, *pStateNode;
 
 /****************************************************
- * 分支匹配头结点结构
+ * 匹配头结点结构
  * 结构体参数：
- * 		State *head;     	头结点不存储节点信息，只作为指针
+ * 		State *head;	头结点数组不存储节点信息，只作为指针
  * 		int len;			头结点包含的基本元素个数，匹配时的最小可匹配串长度
  */
 typedef struct Head {
 	State *head;		// 头结点
 	int len;			// 字符串长度
 } Head, *pHeadNode;
+
+/****************************************************
+ * 分支匹配头结点结构，在模式串中含有'|'时使用
+ * 结构体参数：
+ * 		Head h[10];			分支数组
+ * 		int len;			分支个数
+ */
+typedef struct Branch{
+	Head h[10];
+	int num;
+} Branch;
+
+typedef struct Patterns
+{
+	char pattern[100];
+	int  p;
+}Patterns;

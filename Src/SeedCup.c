@@ -46,6 +46,7 @@ int main(int argc, char const *argv[])
 
 			// 开始匹配
 			char *result = (char *)malloc(1024 * sizeof(char));
+			printf("search %s in %s\n", pattern, str);
 			patternSearch(pattern, str, result);
 			printf("%s", result);
 
@@ -55,6 +56,7 @@ int main(int argc, char const *argv[])
 			free(str);
 			free(result);
 		}
+		fclose(patternFile);
 	}
 	return 0;
 }

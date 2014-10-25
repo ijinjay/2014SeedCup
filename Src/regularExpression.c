@@ -9,14 +9,18 @@
 static void handleBrace(const char *pattern, int *i, const pStateNode currentNode);
 static void handleBracket(const char *pattern, int *i, pStateNode *pNode);
 static void handleSlash(const char *pattern, int *i, pStateNode *pNode);
-static void handleDot(const char *pattern, int *i, pStateNode *pNode);
-static int handleSingle(pStateNode node, char ch);
+static void handleDotStartEnd(const char ch, pStateNode *pNode);
+static int singleCompare(pStateNode node, const char *str, int *pos, int *resultPos);
 static int normalCompare(char ch, ...);
 static int dotCompare(char ch, ...);
 static int numCompare(char ch, ...);
 static int wordCompare(char ch, ...);
 static int selectCompare(char ch, ...);
 static int spaceCompare(char ch, ...);
+static int wordStartCompare(char ch, ...);
+static int lineStartCompare(char ch, ...);
+static int endCompare(char ch, ...);
+static int startEndCompare(char ch, ...);
 
 
 /****************************************************
@@ -34,7 +38,6 @@ int normalCompare(char ch,...) {
 	va_start(v, ch);
 	char *p = va_arg(v, char *);
 	va_end(v);
-	printf("%c-%c: %d ", ch,p[0], ch == p[0]);
 	return (ch == p[0]);
 }
 int dotCompare(char ch,...) {
@@ -48,6 +51,59 @@ int numCompare(char ch, ...) {
 }
 int spaceCompare(char ch, ...) {
 	return isspace(ch);
+}
+int wordStartCompare(char ch, ...) {
+	va_list v;
+	va_start(v, ch);
+	char *str = va_arg(v, char *);
+	int pos = va_arg(v, int);
+	va_end(v);
+
+	if (isspace(str[pos])) 		
+		return 0;
+	if (pos == 0 || isspace(str[pos-1]))
+		return 1;
+	return 0;
+}
+int lineStartCompare(char ch, ...) {
+	va_list v;
+	va_start(v, ch);
+	char *str = va_arg(v, char *);
+	int pos = va_arg(v, int);
+	va_end(v);
+	int first_line = pos==0 && str[pos];
+	int other_line = str[pos] == '\n';
+	if (first_line|| other_line)
+		return 1;
+	return 0;
+}
+int endCompare(char ch, ...) {
+	va_list v;
+	va_start(v, ch);
+	char *str = va_arg(v, char *);
+	int pos = va_arg(v, int);
+	va_end(v);
+
+	printf("$ compare %c\n", ch);
+	int end_str = str[pos] == '\0' && str[pos-1]!='\0';
+	int end_line = str[pos] == '\n' && str[pos-1]!='\n';
+	if (end_str||end_line) 		
+		return 1;
+	return 0;
+}
+int startEndCompare(char ch, ...) {
+	va_list v;
+	va_start(v, ch);
+	char *str = va_arg(v, char *);
+	int pos = va_arg(v, int);
+	va_end(v);
+	int start = (pos!=0 && isspace(str[pos-1])&&isalnum(str[pos]));
+	int end   = (pos<strlen(str) && isalnum(str[pos-1])&&isspace(str[pos]));
+	int line_start = (pos==0 && isalnum(str[pos]));
+	int line_end   = pos==strlen(str)&&isalnum(str[pos]);
+	if (line_start || line_end || start || end)
+		return 1;
+	return 0;
 }
 
 /****************************************************
@@ -67,11 +123,24 @@ int selectCompare(char ch,...) {
 	va_start(v, ch);
 	char *content = va_arg(v, char *);
 	int len = va_arg(v, int);
-	printf("%c", ch);
 	va_end(v);
 	
+	// 待选择的字符数组
+	char selectAr[20];
+	// 当前字符位置
+	int pos = 0;
 	for (int j = 0; j < len; ++j) {
-		if (ch == content[j])
+		// 处理a-z这种范围
+		if (content[j] == '-') {
+			if (content[j-1] < ch && ch < content[j+1])
+				return 1;
+			j ++;
+		}
+		selectAr[pos++] = content[j];
+	}
+	// 处理供选择的字符数组中的内容
+	for (int i = 0; i < pos; ++i) {
+		if (selectAr[i] == ch)
 			return 1;
 	}
 	return 0;
@@ -145,12 +214,14 @@ void handleSlash(const char *pattern, int *i, pStateNode *pNode) {
 	newNode->type = 0;
 	newNode->word.content[0] = pattern[++(*i)];
 	switch(pattern[(*i)]) {
-		case 's': newNode->word.type = space;newNode->word.pCompareFunc = spaceCompare;break;
-		case 'S': newNode->word.type = nonSpace;newNode->word.pCompareFunc = spaceCompare;break;
-		case 'w': newNode->word.type = word;newNode->word.pCompareFunc = wordCompare;break;
-		case 'W': newNode->word.type = nonWord;newNode->word.pCompareFunc = wordCompare;break;
-		case 'd': newNode->word.type = digit;newNode->word.pCompareFunc = numCompare;break;
-		case 'D': newNode->word.type = nonDigit;newNode->word.pCompareFunc = numCompare;break;
+		case 's': newNode->word.type = space;  	 	newNode->word.pCompareFunc = spaceCompare;break;
+		case 'S': newNode->word.type = nonSpace; 	newNode->word.pCompareFunc = spaceCompare;break;
+		case 'w': newNode->word.type = word; 	 	newNode->word.pCompareFunc = wordCompare;break;
+		case 'W': newNode->word.type = nonWord;  	newNode->word.pCompareFunc = wordCompare;break;
+		case 'd': newNode->word.type = digit;	 	newNode->word.pCompareFunc = numCompare;break;
+		case 'D': newNode->word.type = nonDigit; 	newNode->word.pCompareFunc = numCompare;break;
+		case 'b': newNode->word.type = stOrEnd;  	newNode->word.pCompareFunc = startEndCompare;break;
+		case 'B': newNode->word.type = nonStOrEnd;  newNode->word.pCompareFunc = startEndCompare;break;
 		default:  newNode->word.type = pattern[(*i)];
 				  newNode->word.pCompareFunc = normalCompare;
 				  newNode->word.contentLen = 1;
@@ -161,16 +232,20 @@ void handleSlash(const char *pattern, int *i, pStateNode *pNode) {
 	(*pNode) = newNode;
 }
 
-void handleDot(const char *pattern, int *i, pStateNode *pNode) {
+void handleDotStartEnd(const char ch, pStateNode *pNode) {
 	pStateNode newNode = (pStateNode)malloc(sizeof(State));
 	newNode->type = 0;
 	newNode->next = NULL;
-	newNode->word.type = dot;
-	newNode->word.pCompareFunc = dotCompare;
+	switch (ch) {
+		case '.': newNode->word.type = dot; 	newNode->word.pCompareFunc = dotCompare; break;
+		case '^': newNode->word.type = begin; 	newNode->word.pCompareFunc = lineStartCompare; break;
+		case '$': newNode->word.type = dollar; 	newNode->word.pCompareFunc = endCompare; break;
+		default:  printf("Error !\n"); break;
+	}
 	(*pNode)->next = newNode;
 	(*pNode) = newNode;
-	(*i) ++;
 }
+
 /****************************************************
  * 内部函数pattern2NFA
  * 		将模式串转为NFA
@@ -193,8 +268,12 @@ static Head pattern2NFA(const char *pattern) {
 			case '*': currentNode->type = zero2n; h.len --; continue;
 			case '{': handleBrace(pattern, &i, currentNode);	continue;
 			case '[': handleBracket(pattern, &i, &currentNode); h.len ++; continue;
-			case '\\':handleSlash(pattern, &i, &currentNode); h.len ++; continue;
-			case '.': handleDot(pattern, &i, &currentNode); h.len ++; continue;
+			case '\\':handleSlash(pattern, &i, &currentNode); continue;
+			case '.': h.len ++;
+			case '^': 
+			case '$': handleDotStartEnd(pattern[i], &currentNode);continue;
+			case '(': continue;
+			case ')': continue;
 			default:  break;
 		}
 		pStateNode newNode = (pStateNode)malloc(sizeof(State));
@@ -214,125 +293,161 @@ static Head pattern2NFA(const char *pattern) {
  * 内部函数freeHead
  *		释放Head占用的内存
  * 输入参数：
- *		Head h
+ *		Branch branches;
  */
-static void freeHead(Head h) {
-	State *currentNode = h.head;
-	while(currentNode != NULL) {
-		h.head = currentNode->next;
-		free(currentNode);
-		currentNode = h.head;
+static void freeHeads(Branch branches) {
+	for (int i = 0; i < branches.num; ++i) {
+		State *currentNode = branches.h[i].head;
+		while(currentNode != NULL) {
+			branches.h[i].head = currentNode->next;
+			free(currentNode);
+			currentNode = branches.h[i].head;
+		}
 	}
 }
 
-int handleSingle(pStateNode node, char ch) {
+int singleCompare(pStateNode node, const char *str, int *pos, int *k) {
+	int j = *pos;
 	switch(node->word.type) {
 		case dot: 
 		case space:
 		case digit:
-		case begin:
-		case dollar:
-			return ((*(node->word.pCompareFunc))(ch));
+			return ((*(node->word.pCompareFunc))(str[j]));
 		case nonSpace:
 		case nonDigit:
-		case nonBegin:
-			return !((*(node->word.pCompareFunc))(ch));
+			return !((*(node->word.pCompareFunc))(str[j]));
+		case begin:
+		case dollar:
+		case stOrEnd:
+			(*k) --;
+			(*pos) --;
+			return ((*(node->word.pCompareFunc))(str[j], str, j));
+		case nonStOrEnd:
+			(*pos) --;
+			return !((*(node->word.pCompareFunc))(str[j], str, j));
 		case range:
-			return ((*(node->word.pCompareFunc))(ch, node->word.content, node->word.contentLen));
+			return ((*(node->word.pCompareFunc))(str[j], node->word.content, node->word.contentLen));
 		case nonRange:
-			return !((*(node->word.pCompareFunc))(ch, node->word.content, node->word.contentLen));
+			return !((*(node->word.pCompareFunc))(str[j], node->word.content, node->word.contentLen));
 		default:
-			return ((*(node->word.pCompareFunc))(node->word.content[0], &ch));
+			return ((*(node->word.pCompareFunc))(node->word.content[0], str+j));
 	}
 }
 
 // use for test
-// static void printHead(const Head h) {
-// 	pStateNode p = h.head->next;
-// 	while(p != NULL) {
-// 		p = p->next;
-// 	}
-// }
+static void printHead(const Head h) {
+	pStateNode p = h.head->next;
+	printf("length of head is %d\n", h.len);	
+	while(p != NULL) {
+		printf("%c === %d\n", p->word.content[0], p->type);
+		p = p->next;
+	}
+}
 int patternSearch(const char *pattern, const char *str, char *result) {
-	Head h = pattern2NFA(pattern);
-	pStateNode root = h.head;
-	// test
+	// 处理分支
+	Patterns ps[10];
+	int id = 1;
+	int pos = 0;
+	for (int i = 0; i < strlen(pattern); ++i) {
+		if (pattern[i] == '|') {
+			ps[id-1].pattern[pos] = '\0';
+			id ++;
+			pos = 0;
+			continue;
+		}
+		ps[id-1].pattern[pos ++] = pattern[i];
+	}
+	ps[id-1].pattern[pos] = '\0';
+
+	Branch branches;
+	branches.num = id;
+	int minLen = branches.h[0].len;
+	for(int i = 0; i <id ;i++) {
+		printf("%s\n", ps[i].pattern);
+		branches.h[i] = pattern2NFA(ps[i].pattern);
+		minLen = minLen > branches.h[i].len ? branches.h[i].len : minLen;
+		printHead(branches.h[i]);
+	}
+
+	// Head h = pattern2NFA(pattern);
+	// pStateNode root = h.head;
 	// printHead(h);
 
-	for (int i = 0; i <= strlen(str) - h.len; ++i)
+	for (int i = 0; i <= strlen(str) - minLen; ++i)
 	{
-		pStateNode currentNode = root->next;
-		int j = i;
-		int k = 0; 	// 记录result
-		int failFlag = 0;
-		printf("\n");
-		while(currentNode != NULL) {
-			switch(currentNode->type) {
-				// 当前节点重复0-1次
-				case zero2one: 
-						if (handleSingle(currentNode, str[j])) {
-							result[k++] = str[j++];
-						}
-						break;
-				// 重复1-n次
-				case one2n: 
-						if (!handleSingle(currentNode, str[j])) {
-							failFlag = 1;
-							break;
-						}
-						result[k ++] = str[j ++];
-				// 重复0-n次
-				case zero2n: 
-						while(handleSingle(currentNode, str[j]) && j < strlen(str)) {
-							result[k++] = result[j++];
-						}
-						break;
-				// 重复n次
-				case n:
-				case n2m:
-				case n2more:
-						printf("\n------%d-------\n", currentNode->word.content[currentNode->word.contentLen] - '0');
-						for (int t = 0; t < currentNode->word.content[currentNode->word.contentLen] - '0'; ++t) {
-							if (!handleSingle(currentNode, str[j])) {
-								failFlag = 1;break;
-							}
-							result[k++] = str[j++];
-						}
-						if (currentNode->type == n2m) {
-							for (int i = currentNode->word.content[currentNode->word.contentLen]; i < currentNode->word.content[currentNode->word.contentLen + 1] && j < strlen(str); ++i) {
-								if (!handleSingle(currentNode, str[j]))
-									break;
-								result[k++] = str[j++];
-							}
-						}
-						if (currentNode->type == n2more) {
-							while(handleSingle(currentNode, str[j]) && j < strlen(str)) {
-								result[k++] = str[j++];
-							}
-						}
-						break;
-				default:if (handleSingle(currentNode, str[j]))
-							result[k++] = result[j++];
-						else
-							failFlag = 1;
-						break;
-			}
-			if (failFlag)
-				break;
-			currentNode = currentNode->next;
-		}
-		if (!failFlag)
+		for (int branchID = 0; branchID < id; ++branchID)
 		{
-			result[k] = '\0';
-			printf("Success %d, %d\n", i, k);
-			for (int l = 0; l < k; ++l)
-			{
-				result[l] = str[i+l];
+			pStateNode currentNode = branches.h[branchID].head->next;
+			int j = i;
+			int k = 0; 	// 记录result
+			int failFlag = 0;
+			while(currentNode != NULL) {
+				switch(currentNode->type) {
+					// 当前节点重复0-1次
+					case zero2one: 
+							if (singleCompare(currentNode, str, &j, &k)) {
+								result[k++] = str[j++];
+							}
+							break;
+					// 重复1-n次
+					case one2n: 
+							if (!singleCompare(currentNode, str, &j, &k)) {
+								failFlag = 1;
+								break;
+							}
+							result[k ++] = str[j ++];
+					// 重复0-n次
+					case zero2n: 
+							while(singleCompare(currentNode, str, &j, &k) && j < strlen(str)) {
+								result[k++] = result[j++];
+							}
+							break;
+					// 重复n次
+					case n:
+					case n2m:
+					case n2more:
+							for (int t = 0; t < currentNode->word.content[currentNode->word.contentLen] - '0'; ++t) {
+								if (!singleCompare(currentNode, str, &j, &k)) {
+									failFlag = 1;break;
+								}
+								result[k++] = str[j++];
+							}
+							if (currentNode->type == n2m) {
+								for (int i = currentNode->word.content[currentNode->word.contentLen]; i < currentNode->word.content[currentNode->word.contentLen + 1] && j < strlen(str); ++i) {
+									if (!singleCompare(currentNode, str, &j, &k))
+										break;
+									result[k++] = str[j++];
+								}
+							}
+							if (currentNode->type == n2more) {
+								while(singleCompare(currentNode, str, &j, &k) && j < strlen(str)) {
+									result[k++] = str[j++];
+								}
+							}
+							break;
+					default:if (singleCompare(currentNode, str, &j, &k))
+								result[k++] = result[j++];
+							else
+								failFlag = 1;
+							break;
+				}
+				if (failFlag)
+					break;
+				currentNode = currentNode->next;
 			}
-			freeHead(h);
-			return 1;
+			if (!failFlag)
+			{
+				result[k] = '\0';
+				printf("Success %d, %d\n", i, k);
+				for (int l = 0; l < k; ++l)
+				{
+					result[l] = str[i+l];
+				}
+				freeHeads(branches);
+				return 1;
+			}
 		}
 	}
-	freeHead(h);
+	freeHeads(branches);
 	return 0;
 }
