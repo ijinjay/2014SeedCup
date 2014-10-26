@@ -29,7 +29,10 @@ int main(int argc, char const *argv[])
 			char pattern[1024];
 			fgets(pattern, 1024, patternFile);
 			int len = strlen(pattern);
-			pattern[len - 1] = '\0';
+			// 将读到的换行符替换为 '\0'
+			if (pattern[len - 1] == '\n') {
+				pattern[len - 1] = '\0';
+			}
 
 			// 读取待匹配串文件数据到str
 			char *str = (char *)malloc(1024 * sizeof(char));

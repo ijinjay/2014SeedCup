@@ -283,17 +283,16 @@ void handleDotStartEnd(const char ch, pStateNode *pNode) {
 	appendStateNode(pNode, newNode);
 }
 
+// 遇到左小括号时，新建一个leftP类型的节点添加进入节点链表
 void handleLeftParentheses(pStateNode *pNode){
-	// 遇到左小括号时，新建一个leftP类型的节点添加进入节点链表
 	pStateNode newNode = aNewStateNode();
 	newNode->type = leftP;
 	newNode->word.content[0] = '(';
-	newNode->word.type = '(';
 	appendStateNode(pNode, newNode);
 }
 
+// 遇到右小括号时，新建一个rightP类型的节点添加进入节点链表
 void handleRightParentheses(pStateNode *pNode){
-	// 遇到左小括号时，新建一个rightP类型的节点添加进入节点链表
 	pStateNode newNode = aNewStateNode();
 	newNode->type = rightP;
 	newNode->word.content[0] = ')';
@@ -311,7 +310,7 @@ void handleRightParentheses(pStateNode *pNode){
 Head pattern2NFA(const char *pattern) {
 	Head h;
 	// 初始化
-	h.head = (State *)malloc(sizeof(State));
+	h.head = aNewStateNode();
 	h.len = 0;
 	int length = strlen(pattern);
 	pStateNode currentNode = h.head;
@@ -402,6 +401,8 @@ int singleCompare(pStateNode node, const char *str, int *pos, int *k) {
 	}
 }
 
+// 外部函数，接口使用方法见.h文件
+// TODO: 改写成使用表驱动的方式，添加贪婪匹配和贪婪回退
 int patternSearch(const char *pattern, const char *str, char *result) {
 	// 处理分支
 	Patterns ps[10];
@@ -539,14 +540,25 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 			}
 		}	
 	}
-	// 匹配失败，应返回NULL给result
+	// 匹配失败，应返回NULL给result,这里返回0，交由上层调用处理
 
 	// 释放内存
 	freeHeads(branches);
 	return 0;
 }
-// 处理分组
-// 将字符压入栈中，参数为栈数组、字符、位置值指针、group数组、group编号指针
+
+/****************************************************
+ * 内部函数push
+ *		将一个字符元素放入栈中
+ * 输入参数：
+ *		StackNode stack;		栈数组名
+ *		char c;					放入栈中的字符
+ * 		int *pos;				指向栈顶位置的指针
+ * 		Group gs[];				分组数组名
+ 		int *num;				指向分组编号的指针
+ * 返回值：
+ 		无
+ */
 void push(StackNode stack[], char c, int *pos,Group gs[], int *num) {
 	if(c == ')'){
 		Group* gp = genGroup(stack, pos);
@@ -557,6 +569,7 @@ void push(StackNode stack[], char c, int *pos,Group gs[], int *num) {
 			gs[i].str[j] = gp->str[gs[i].len-1-j];
 		}
 		gs[i].str[gp->len] = '\0';
+		free(gp);		
 	}
 	else{
 		if(c == '('){
@@ -571,7 +584,16 @@ void push(StackNode stack[], char c, int *pos,Group gs[], int *num) {
 char pop(StackNode stack[], int *pos) {
 	return(stack[-- (*pos)].c);
 }
-//生成新的分组
+
+/****************************************************
+ * 内部函数genGroup
+ *		生成一个新的分组
+ * 输入参数：
+ *		StackNode stack[];		栈数组名
+ * 		int *pos;				当前匹配的位置，会被更改
+ * 返回值：
+ *		Group* 					指向新生成分组的指针
+ */
 Group* genGroup(StackNode stack[], int *pos) {
 	Group* newGroup = (Group*)malloc(sizeof(Group));
 	int len = 0;
