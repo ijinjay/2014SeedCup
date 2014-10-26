@@ -1,7 +1,7 @@
 /****************************************************
  * Author: Jin Jay
  * Created On: 2014-10-23
- * Last-Modified: 2014-10-23
+ * Last-Modified: 2014-10-24
  */
 
 #ifndef _FILEHANDLE_H
@@ -29,7 +29,7 @@
  * 		0：						读取文件数据成功
  *		1：						读取文件数据失败
  */
-int readFileData(int i, char *data);
+extern int readFileData(int i, char *data);
 
 /****************************************************
  * 外部接口writeFile:
@@ -41,4 +41,4 @@ int readFileData(int i, char *data);
  * 		0： 						成功
  * 		1： 						失败
  */
-int writeFile(int i, const char *data);
+extern int writeFile(int i, const char *data);

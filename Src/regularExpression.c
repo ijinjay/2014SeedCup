@@ -4,13 +4,15 @@
  * Last-Modified: 2014-10-23
  */
 
-#include "regularExpression.h"
+ #include "regularExpression.h"
 /* 内部函数列表 */
 // 处理模式串的函数
 static void handleBrace(const char *pattern, int *i, const pStateNode currentNode); 
 static void handleBracket(const char *pattern, int *i, pStateNode *pNode);
 static void handleSlash(const char *pattern, int *i, pStateNode *pNode);
 static void handleDotStartEnd(const char ch, pStateNode *pNode);
+static void handleLeftParentheses(pStateNode *pNode);
+static void handleRightParentheses(pStateNode *pNode);
 // 处理匹配时的比较函数
 static int normalCompare(char ch, ...);
 static int dotCompare(char ch, ...);
@@ -18,7 +20,6 @@ static int numCompare(char ch, ...);
 static int wordCompare(char ch, ...);
 static int selectCompare(char ch, ...);
 static int spaceCompare(char ch, ...);
-static int wordStartCompare(char ch, ...);
 static int lineStartCompare(char ch, ...);
 static int endCompare(char ch, ...);
 static int startEndCompare(char ch, ...);
@@ -28,7 +29,10 @@ static int singleCompare(pStateNode node, const char *str, int *pos, int *result
 static Head pattern2NFA(const char *pattern);
 // 释放节点链表分支占用的内存
 static void freeHeads(Branch branches);
-
+// 用来处理分组的堆栈
+static void push(StackNode stack[],char c, int *pos, Group gs[], int *num);
+static char pop(StackNode stack[], int *pos);
+static Group* genGroup(StackNode stack[], int *pos);
 
 /****************************************************
  * 处理比较的语句
@@ -59,21 +63,6 @@ int numCompare(char ch, ...) {
 int spaceCompare(char ch, ...) {
 	return isspace(ch);
 }
-// 匹配单词开始位置，当前位置为第一个字符时或前一个字符是空字符且当前字符不为空字符
-int wordStartCompare(char ch, ...) {
-	// 解析可变参数列表
-	va_list v;
-	va_start(v, ch);
-	char *str = va_arg(v, char *);
-	int pos = va_arg(v, int);
-	va_end(v);
-
-	if (isspace(str[pos])) 		
-		return 0;
-	if (pos == 0 || isspace(str[pos-1]))
-		return 1;
-	return 0;
-}
 // 匹配行开始，当前位置为第一个字符或前一个字符为'\n'
 int lineStartCompare(char ch, ...) {
 	va_list v;
@@ -95,7 +84,6 @@ int endCompare(char ch, ...) {
 	int pos = va_arg(v, int);
 	va_end(v);
 
-	printf("$ compare %c\n", ch);
 	int end_str = str[pos] == '\0' && str[pos-1]!='\0';
 	int end_line = str[pos] == '\n' && str[pos-1]!='\n';
 	if (end_str||end_line) 		
@@ -168,19 +156,19 @@ int selectCompare(char ch,...) {
  *		pStateNode node;		当前单词节点
  */
 void handleBrace(const char *pattern, int *i, pStateNode node) {
-	if (pattern[(*i)+2] == '}')  		// {n}	
+	if (pattern[(*i)+2] == '}')  		// {n}	将n放在content[contentLen]处
 	{
 		node->type = n;
 		node->word.content[node->word.contentLen] = pattern[(*i)+1];
 		(*i) = (*i) + 2;
 	}
-	else if (pattern[(*i)+3] == '}') 	// {n,}
+	else if (pattern[(*i)+3] == '}') 	// {n,} 将n放在content[contentLen]处
 	{
 		node->type = n2more;
 		node->word.content[node->word.contentLen] = pattern[(*i)+1];
 		(*i) = (*i) + 3;
 	}
-	else if (pattern[(*i)+4] == '}')	// {n,m}
+	else if (pattern[(*i)+4] == '}')	// {n,m} 将n放在content[contentLen]处，m放在content[contentLen+1]处
 	{
 		node->type = n2m;
 		node->word.content[node->word.contentLen] = pattern[(*i)+1];
@@ -244,10 +232,18 @@ void handleSlash(const char *pattern, int *i, pStateNode *pNode) {
 		case 'D': newNode->word.type = nonDigit; 	newNode->word.pCompareFunc = numCompare;break;
 		case 'b': newNode->word.type = stOrEnd;  	newNode->word.pCompareFunc = startEndCompare;break;
 		case 'B': newNode->word.type = nonStOrEnd;  newNode->word.pCompareFunc = startEndCompare;break;
-		default:  newNode->word.type = pattern[(*i)];
-				  newNode->word.pCompareFunc = normalCompare;
-				  newNode->word.contentLen = 1;
- 				  break;
+		default:  
+				// 分组组号处理
+				if(isdigit(pattern[(*i)])){
+					newNode->type = quote;
+					newNode->word.quoteIndex = pattern[(*i)] - '0';
+				}
+				else{
+					newNode->word.type = pattern[(*i)];
+					newNode->word.pCompareFunc = normalCompare;
+					newNode->word.contentLen = 1;
+				}
+				break;
 	}
 	// 将生成的新节点加入链表
 	newNode->next = NULL;
@@ -261,9 +257,9 @@ void handleDotStartEnd(const char ch, pStateNode *pNode) {
 	newNode->next = NULL;
 	// 根据不同的单词类型添加不同的比较函数
 	switch (ch) {
-		case '.': newNode->word.type = dot; 	newNode->word.pCompareFunc = dotCompare; break;
-		case '^': newNode->word.type = begin; 	newNode->word.pCompareFunc = lineStartCompare; break;
-		case '$': newNode->word.type = dollar; 	newNode->word.pCompareFunc = endCompare; break;
+		case '.': newNode->word.type = dot; 	newNode->word.content[0] = '.';	newNode->word.pCompareFunc = dotCompare; break;
+		case '^': newNode->word.type = begin; 	newNode->word.content[0] = '^';	newNode->word.pCompareFunc = lineStartCompare; break;
+		case '$': newNode->word.type = dollar; 	newNode->word.content[0] = '$';	newNode->word.pCompareFunc = endCompare; break;
 		default:  printf("Error !\n"); break;
 	}
 	// 将生成的新节点加入链表
@@ -271,6 +267,26 @@ void handleDotStartEnd(const char ch, pStateNode *pNode) {
 	(*pNode) = newNode;
 }
 
+void handleLeftParentheses(pStateNode *pNode){
+	// 遇到左小括号时，新建一个leftP类型的节点添加进入节点链表
+	pStateNode newNode = (pStateNode)malloc(sizeof(State));
+	newNode->type = leftP;
+	newNode->word.content[0] = '(';
+	newNode->word.type = '(';
+	newNode->next = NULL;
+	(*pNode)->next = newNode;
+	(*pNode) = newNode;
+}
+
+void handleRightParentheses(pStateNode *pNode){
+	// 遇到左小括号时，新建一个rightP类型的节点添加进入节点链表
+	pStateNode newNode = (pStateNode)malloc(sizeof(State));
+	newNode->type = rightP;
+	newNode->word.content[0] = ')';
+	newNode->next = NULL;
+	(*pNode)->next = newNode;
+	(*pNode) = newNode;
+}
 /****************************************************
  * 内部函数pattern2NFA
  * 		将模式串转为NFA
@@ -296,11 +312,11 @@ Head pattern2NFA(const char *pattern) {
 			case '{': handleBrace(pattern, &i, currentNode);	continue;
 			case '[': handleBracket(pattern, &i, &currentNode); h.len ++; continue;
 			case '\\':handleSlash(pattern, &i, &currentNode); continue;
-			case '.': h.len ++;
+			case '.': h.len ++; /* 仅有意义的字符，占用一个长度 */
 			case '^': 
 			case '$': handleDotStartEnd(pattern[i], &currentNode);continue;
-			case '(': continue;
-			case ')': continue;
+			case '(': handleLeftParentheses(&currentNode);continue;
+			case ')': handleRightParentheses(&currentNode);continue;
 			default:  break;
 		}
 		// 为普通的字符时，直接新建一个节点，保存为普通类型，加入节点链表
@@ -352,9 +368,11 @@ int singleCompare(pStateNode node, const char *str, int *pos, int *k) {
 		case dot: 
 		case space:
 		case digit:
+		case word:
 			return ((*(node->word.pCompareFunc))(str[j]));
 		case nonSpace:
 		case nonDigit:
+		case nonWord:
 			return !((*(node->word.pCompareFunc))(str[j]));
 		case begin:
 		case dollar:
@@ -363,6 +381,7 @@ int singleCompare(pStateNode node, const char *str, int *pos, int *k) {
 			(*pos) --;
 			return ((*(node->word.pCompareFunc))(str[j], str, j));
 		case nonStOrEnd:
+			(*k) --;
 			(*pos) --;
 			return !((*(node->word.pCompareFunc))(str[j], str, j));
 		case range:
@@ -388,6 +407,7 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 	Patterns ps[10];
 	int id = 1;
 	int pos = 0;
+	// 遇到|就产生一个新的分支，保存分支的模式串到ps数组
 	for (int i = 0; i < strlen(pattern); ++i) {
 		if (pattern[i] == '|') {
 			ps[id-1].pattern[pos] = '\0';
@@ -397,32 +417,46 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 		}
 		ps[id-1].pattern[pos ++] = pattern[i];
 	}
+	// 在末尾加'\0'保证是一个字符串,不会越界
 	ps[id-1].pattern[pos] = '\0';
 
+	// 将每一个模式串转为NFA
 	Branch branches;
 	branches.num = id;
-	int minLen = branches.h[0].len;
-	for(int i = 0; i <id ;i++) {
-		printf("%s\n", ps[i].pattern);
+	int minLen = branches.h[0].len;  // 记录模式串的最小可匹配长度
+	for(int i = 0; i < id ;i++) {
+		printf("%dth of %d branchese: %s\n", i+1, id, ps[i].pattern);
 		branches.h[i] = pattern2NFA(ps[i].pattern);
 		minLen = minLen > branches.h[i].len ? branches.h[i].len : minLen;
 		printHead(branches.h[i]);
 	}
 
 	// 遍历待匹配字符串，逐一匹配
-	for (int i = 0; i <= strlen(str) - minLen; ++i)
-	{
-		for (int branchID = 0; branchID < id; ++branchID)
-		{
+	for (int i = 0; i <= strlen(str) - minLen; ++i) {
+		for (int branchID = 0; branchID < id; ++branchID) {
+			StackNode stack[100]; //分组用存储栈
+			Group gs[10];
+			int sPos = 0;
+			int num = 1;
 			pStateNode currentNode = branches.h[branchID].head->next;
 			int j = i;
 			int k = 0; 	// 记录result
 			int failFlag = 0;
+			int ind;
 			while(currentNode != NULL) {
 				switch(currentNode->type) {
+					// 左括号
+					case leftP:
+							push(stack,'(',&sPos,gs,&num);
+							break;
+					// 右括号
+					case rightP:
+							push(stack,')',&sPos,gs,&num);
+							break;
 					// 当前节点重复0-1次
 					case zero2one: 
 							if (singleCompare(currentNode, str, &j, &k)) {
+								push(stack,str[j],&sPos,gs,&num);
 								result[k++] = str[j++];
 							}
 							break;
@@ -432,10 +466,12 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 								failFlag = 1;
 								break;
 							}
+							push(stack,str[j],&sPos,gs,&num);
 							result[k ++] = str[j ++];
 					// 重复0-n次
 					case zero2n: 
 							while(singleCompare(currentNode, str, &j, &k) && j < strlen(str)) {
+								push(stack,str[j],&sPos,gs,&num);
 								result[k++] = result[j++];
 							}
 							break;
@@ -447,31 +483,50 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 								if (!singleCompare(currentNode, str, &j, &k)) {
 									failFlag = 1;break;
 								}
+								push(stack,str[j],&sPos,gs,&num);
 								result[k++] = str[j++];
 							}
 							if (currentNode->type == n2m) {
 								for (int i = currentNode->word.content[currentNode->word.contentLen]; i < currentNode->word.content[currentNode->word.contentLen + 1] && j < strlen(str); ++i) {
 									if (!singleCompare(currentNode, str, &j, &k))
 										break;
+									push(stack,str[j],&sPos,gs,&num);
 									result[k++] = str[j++];
 								}
 							}
 							if (currentNode->type == n2more) {
 								while(singleCompare(currentNode, str, &j, &k) && j < strlen(str)) {
+									push(stack,str[j],&sPos,gs,&num);
 									result[k++] = str[j++];
 								}
 							}
 							break;
+					// 处理小括号分组组号
+					case quote:
+								ind = currentNode->word.quoteIndex;
+								for(int m = 0; m < gs[ind].len; m++) {
+									//进行比较
+									if(gs[ind].str[m] == str[j]) {		
+										push(stack, str[j], &sPos, gs, &num);
+										result[k++] = str[j++];
+									}
+									else
+										failFlag = 1;
+								}
+								break;
 					// 默认情况是直接匹配，不重复更多次
-					default:if (singleCompare(currentNode, str, &j, &k))
+					default:if (singleCompare(currentNode, str, &j, &k)){
+								if(currentNode->word.type < 255)
+								push(stack,str[j],&sPos,gs,&num);
 								result[k++] = result[j++];
+							}
 							else
 								failFlag = 1;
 							break;
 				}
 				if (failFlag)
 					break;
-				currentNode = currentNode->next;
+				currentNode = currentNode->next;			
 			}
 			// 匹配成功
 			if (!failFlag) {
@@ -484,11 +539,53 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 				freeHeads(branches);
 				return 1;
 			}
-		}
+		}	
 	}
 	// 匹配失败，应返回NULL给result
-	
+
 	// 释放内存
 	freeHeads(branches);
 	return 0;
+}
+// 处理分组
+// 将字符压入栈中，参数为栈数组、字符、位置值指针、group数组、group编号指针
+void push(StackNode stack[], char c, int *pos,Group gs[], int *num) {
+	if(c == ')'){
+		Group* gp = genGroup(stack, pos);
+		int i = gp->id;
+		gs[i].id = gp->id;
+		gs[i].len = gp->len;
+		for(int j = 0; j< gp->len; j++) {
+			gs[i].str[j] = gp->str[gs[i].len-1-j];
+		}
+		gs[i].str[gp->len] = '\0';
+	}
+	else{
+		if(c == '('){
+			stack[*pos].id = *num;
+			(*num)++;
+		}
+		stack[*pos].c = c;
+		(*pos)++; 
+	}
+}
+//弹出栈顶元素
+char pop(StackNode stack[], int *pos) {
+	return(stack[-- (*pos)].c);
+}
+//生成新的分组
+Group* genGroup(StackNode stack[], int *pos) {
+	Group* newGroup = (Group*)malloc(sizeof(Group));
+	int len = 0;
+	char c;
+	while((c = pop(stack, pos))!='(') {
+		newGroup->str[len++] = c;
+	}	
+	newGroup->id = stack[(*pos)].id;
+	newGroup->len = len;
+	for(int j = len-1; j>=0 ;j--) {
+		stack[*pos].c = newGroup->str[j];
+		(*pos)++;
+	}
+	return newGroup;
 }
