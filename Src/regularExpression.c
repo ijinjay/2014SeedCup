@@ -5,7 +5,7 @@
  */
 
  #include "regularExpression.h"
-/* 内部函数列表 */
+/********************* 内部函数列表 ******************/
 // 处理模式串的函数
 static void handleBrace(const char *pattern, int *i, const pStateNode currentNode); 
 static void handleBracket(const char *pattern, int *i, pStateNode *pNode);
@@ -13,6 +13,8 @@ static void handleSlash(const char *pattern, int *i, pStateNode *pNode);
 static void handleDotStartEnd(const char ch, pStateNode *pNode);
 static void handleLeftParentheses(pStateNode *pNode);
 static void handleRightParentheses(pStateNode *pNode);
+static pStateNode aNewStateNode(void);										/* 新建并初始化一个状态节点 */
+static void appendStateNode(pStateNode *pNode, const pStateNode newNode);	/* 将一个新节点追加到状态节点链表 */
 // 处理匹配时的比较函数
 static int normalCompare(char ch, ...);
 static int dotCompare(char ch, ...);
@@ -47,6 +49,7 @@ static Group* genGroup(StackNode stack[], int *pos);
 int normalCompare(char ch,...) {
 	va_list v;
 	va_start(v, ch);
+	// 变长参数函数，变参不能是char，故传入char的地址,ch为待匹配字符，p[0]为模式字符
 	char *p = va_arg(v, char *);
 	va_end(v);
 	return (ch == p[0]);
@@ -67,6 +70,7 @@ int spaceCompare(char ch, ...) {
 int lineStartCompare(char ch, ...) {
 	va_list v;
 	va_start(v, ch);
+	// str为待匹配串，pos为待匹配的字符位置
 	char *str = va_arg(v, char *);
 	int pos = va_arg(v, int);
 	va_end(v);
@@ -80,10 +84,10 @@ int lineStartCompare(char ch, ...) {
 int endCompare(char ch, ...) {
 	va_list v;
 	va_start(v, ch);
+	// str为待匹配串，pos为待匹配的字符位置
 	char *str = va_arg(v, char *);
 	int pos = va_arg(v, int);
 	va_end(v);
-
 	int end_str = str[pos] == '\0' && str[pos-1]!='\0';
 	int end_line = str[pos] == '\n' && str[pos-1]!='\n';
 	if (end_str||end_line) 		
@@ -145,6 +149,22 @@ int selectCompare(char ch,...) {
 	}
 	return 0;
 }
+static pStateNode aNewStateNode(void) {
+	pStateNode newNode 		 	= (pStateNode)malloc(sizeof(State));
+	newNode->type 			 	= 0;
+	newNode->next 			 	= NULL;
+	newNode->word.type 		 	= 0;
+	newNode->word.contentLen 	= 0;
+	newNode->word.content[0] 	= '\0';
+	newNode->word.pCompareFunc 	= NULL;
+	newNode->word.quoteIndex	= 0;
+	return newNode;
+}
+
+static void appendStateNode(pStateNode *pNode, const pStateNode newNode) {
+	(*pNode)->next 	= newNode;
+	(*pNode) 	  	= newNode;
+}
 
 /****************************************************
  * 内部函数handleBrace
@@ -156,20 +176,17 @@ int selectCompare(char ch,...) {
  *		pStateNode node;		当前单词节点
  */
 void handleBrace(const char *pattern, int *i, pStateNode node) {
-	if (pattern[(*i)+2] == '}')  		// {n}	将n放在content[contentLen]处
-	{
+	if (pattern[(*i)+2] == '}') { 		// {n}	将n放在content[contentLen]处
 		node->type = n;
 		node->word.content[node->word.contentLen] = pattern[(*i)+1];
 		(*i) = (*i) + 2;
 	}
-	else if (pattern[(*i)+3] == '}') 	// {n,} 将n放在content[contentLen]处
-	{
+	else if (pattern[(*i)+3] == '}') {	// {n,} 将n放在content[contentLen]处
 		node->type = n2more;
 		node->word.content[node->word.contentLen] = pattern[(*i)+1];
 		(*i) = (*i) + 3;
 	}
-	else if (pattern[(*i)+4] == '}')	// {n,m} 将n放在content[contentLen]处，m放在content[contentLen+1]处
-	{
+	else if (pattern[(*i)+4] == '}') {	// {n,m} 将n放在content[contentLen]处，m放在content[contentLen+1]处
 		node->type = n2m;
 		node->word.content[node->word.contentLen] = pattern[(*i)+1];
 		node->word.content[node->word.contentLen + 1] = pattern[(*i)+3];
@@ -189,12 +206,9 @@ void handleBrace(const char *pattern, int *i, pStateNode node) {
  *		pStateNode pNode;		当前单词节点
  */
 void handleBracket(const char *pattern, int *i, pStateNode *pNode) {
-	// 新节点
-	pStateNode newNode = (pStateNode)malloc(sizeof(State));
-	newNode->type = 0;
-	newNode->next = NULL;
+	// 新节点及初始化
+	pStateNode newNode = aNewStateNode();
 	newNode->word.type = range;
-	newNode->word.contentLen = 0;
 	// 是否含有^
 	if (pattern[(*i)+1] == '^') {
 		(*i) ++;
@@ -205,8 +219,7 @@ void handleBracket(const char *pattern, int *i, pStateNode *pNode) {
 		newNode->word.content[newNode->word.contentLen ++] = pattern[(*i)];
 	}
 	newNode->word.pCompareFunc = selectCompare;
-	(*pNode)->next = newNode;
-	(*pNode) = newNode;
+	appendStateNode(pNode, newNode);
 }
 
 /****************************************************
@@ -219,9 +232,8 @@ void handleBracket(const char *pattern, int *i, pStateNode *pNode) {
  *		pStateNode node;		当前单词节点
  */
 void handleSlash(const char *pattern, int *i, pStateNode *pNode) {
-	// 新节点
-	pStateNode newNode = (pStateNode)malloc(sizeof(State));
-	newNode->type = 0;
+	// 新节点及初始化
+	pStateNode newNode = aNewStateNode();
 	newNode->word.content[0] = pattern[++(*i)];
 	// 根据转义字符类型，添加节点的类型和相应的比较处理函数
 	switch(pattern[(*i)]) {
@@ -247,15 +259,19 @@ void handleSlash(const char *pattern, int *i, pStateNode *pNode) {
 				break;
 	}
 	// 将生成的新节点加入链表
-	newNode->next = NULL;
-	(*pNode)->next = newNode;
-	(*pNode) = newNode;
+	appendStateNode(pNode, newNode);
 }
 
+/****************************************************
+ * 内部函数handleDotStartEnd
+ * 		处理'.' '^' '$'
+ * 输入参数：
+ *		const char ch;			模式字符
+ *		pStateNode *pNode;		当前NFA节点
+ */
 void handleDotStartEnd(const char ch, pStateNode *pNode) {
-	pStateNode newNode = (pStateNode)malloc(sizeof(State));
-	newNode->type = 0;
-	newNode->next = NULL;
+	// 新节点及初始化
+	pStateNode newNode = aNewStateNode();
 	// 根据不同的单词类型添加不同的比较函数
 	switch (ch) {
 		case '.': newNode->word.type = dot; 	newNode->word.content[0] = '.';	newNode->word.pCompareFunc = dotCompare; break;
@@ -264,29 +280,24 @@ void handleDotStartEnd(const char ch, pStateNode *pNode) {
 		default:  printf("Error !\n"); break;
 	}
 	// 将生成的新节点加入链表
-	(*pNode)->next = newNode;
-	(*pNode) = newNode;
+	appendStateNode(pNode, newNode);
 }
 
 void handleLeftParentheses(pStateNode *pNode){
 	// 遇到左小括号时，新建一个leftP类型的节点添加进入节点链表
-	pStateNode newNode = (pStateNode)malloc(sizeof(State));
+	pStateNode newNode = aNewStateNode();
 	newNode->type = leftP;
 	newNode->word.content[0] = '(';
 	newNode->word.type = '(';
-	newNode->next = NULL;
-	(*pNode)->next = newNode;
-	(*pNode) = newNode;
+	appendStateNode(pNode, newNode);
 }
 
 void handleRightParentheses(pStateNode *pNode){
 	// 遇到左小括号时，新建一个rightP类型的节点添加进入节点链表
-	pStateNode newNode = (pStateNode)malloc(sizeof(State));
+	pStateNode newNode = aNewStateNode();
 	newNode->type = rightP;
 	newNode->word.content[0] = ')';
-	newNode->next = NULL;
-	(*pNode)->next = newNode;
-	(*pNode) = newNode;
+	appendStateNode(pNode, newNode);
 }
 /****************************************************
  * 内部函数pattern2NFA
@@ -321,14 +332,11 @@ Head pattern2NFA(const char *pattern) {
 			default:  break;
 		}
 		// 为普通的字符时，直接新建一个节点，保存为普通类型，加入节点链表
-		pStateNode newNode = (pStateNode)malloc(sizeof(State));
+		pStateNode newNode = aNewStateNode();
 		newNode->word.content[0] = pattern[i];
 		newNode->word.contentLen = 1;
 		newNode->word.pCompareFunc = normalCompare;
-		newNode->type = 0;
-		newNode->next = NULL;
-		currentNode->next = newNode;
-		currentNode = newNode;
+		appendStateNode(&currentNode, newNode);
 		h.len ++;
 	}
 	return h;
@@ -394,15 +402,6 @@ int singleCompare(pStateNode node, const char *str, int *pos, int *k) {
 	}
 }
 
-// use for test
-static void printHead(const Head h) {
-	pStateNode p = h.head->next;
-	printf("length of head is %d\n", h.len);	
-	while(p != NULL) {
-		printf("%c === %d\n", p->word.content[0], p->type);
-		p = p->next;
-	}
-}
 int patternSearch(const char *pattern, const char *str, char *result) {
 	// 处理分支
 	Patterns ps[10];
@@ -426,10 +425,8 @@ int patternSearch(const char *pattern, const char *str, char *result) {
 	branches.num = id;
 	int minLen = branches.h[0].len;  // 记录模式串的最小可匹配长度
 	for(int i = 0; i < id ;i++) {
-		printf("%dth of %d branchese: %s\n", i+1, id, ps[i].pattern);
 		branches.h[i] = pattern2NFA(ps[i].pattern);
 		minLen = minLen > branches.h[i].len ? branches.h[i].len : minLen;
-		printHead(branches.h[i]);
 	}
 
 	// 遍历待匹配字符串，逐一匹配

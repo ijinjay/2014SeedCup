@@ -82,10 +82,9 @@ typedef struct WordNode {
  * 		记录当前的状态信息
  */
 typedef struct State {
-	WordNode word;			// 当前待匹配单词
+	WordNode 		word;	// 当前待匹配单词
 	enum eMulTimes 	type;	// 当前状态重复信息
 	struct State * 	next;	// 下一个状态节点
-	//enum  eParentheses pType;	// 结点的小括号状态
 } State, *pStateNode;
 /******************************************************
 分组结构
