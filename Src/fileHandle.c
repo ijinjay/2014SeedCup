@@ -10,7 +10,7 @@ int readFileData(int i, char *data)
 {
 	// 产生待读取的文件名
 	char *filename = (char *)malloc(30 * sizeof(char));
-	sprintf(filename, "../RegexDemo/text%d.txt", i);
+	sprintf(filename, "text%d.txt", i);
 	int fd = open(filename, O_RDONLY);
 	// 释放内存
 	free(filename);

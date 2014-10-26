@@ -1,7 +1,7 @@
 /****************************************************
- * Author: Jin Jay
+ * Author: Jin Jay & Liu Benxi
  * Created On: 2014-10-23
- * Last-Modified: 2014-10-23
+ * Last-Modified: 2014-10-26
  */
 
  #include "regularExpression.h"
