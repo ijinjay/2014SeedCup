@@ -186,7 +186,7 @@ void handleBrace(const char *pattern, int *i, pStateNode node) {
  *		const char *pattern;	模式串
  * 输入和输出参数：
  *		int *i;					当前[所在位置
- *		pStateNode node;		当前单词节点
+ *		pStateNode pNode;		当前单词节点
  */
 void handleBracket(const char *pattern, int *i, pStateNode *pNode) {
 	// 新节点
@@ -194,6 +194,7 @@ void handleBracket(const char *pattern, int *i, pStateNode *pNode) {
 	newNode->type = 0;
 	newNode->next = NULL;
 	newNode->word.type = range;
+	newNode->word.contentLen = 0;
 	// 是否含有^
 	if (pattern[(*i)+1] == '^') {
 		(*i) ++;
